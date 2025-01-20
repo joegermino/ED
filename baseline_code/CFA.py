@@ -164,8 +164,11 @@ class CFA(nn.Module):
         for layer in self.layers[1:]:
             h = layer(h)
         return hidden_emb, h
+    
+    def predict_proba(self, X):
+        return self.predict_proba_1(X).detach().numpy()[:, 1]
 
-    def predict_proba(self, x):
+    def predict_proba_1(self, x):
         x = torch.tensor(x).float()
         h = x
         for layer in self.layers:
@@ -417,5 +420,5 @@ if __name__ == '__main__':
     X_test = scl.transform(X_test)
     mdl = CFA(X.shape[1], 50, .001, 10)
     mdl.fit(X_train, y_train, list(X.columns).index('sex__Male'))
-    preds = mdl.predict_proba(X_test).detach().numpy()[:, 1]
+    preds = mdl.predict_proba_1(X_test).detach().numpy()[:, 1]
     print(roc_auc_score(y_test, preds))

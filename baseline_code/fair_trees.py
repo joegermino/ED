@@ -775,7 +775,7 @@ class FairDecisionTreeClassifier():
             ((1 - y_prob), y_prob),
             axis=1
         )
-       
+
     def predict(self, X, theta=None):
         y_prob = self.predict_proba(X, theta)[:,1]            
         y_pred = (y_prob >= 0.5).astype(int)
@@ -1069,7 +1069,7 @@ class FairRandomForestClassifier():
                 [prob for proba_batch in proba_batches for prob in proba_batch],
                 axis=0
             ).reshape(-1,1)
-         
+
         return np.concatenate(
             (1- y_prob, y_prob), 
             axis=1

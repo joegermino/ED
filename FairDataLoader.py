@@ -232,3 +232,18 @@ def get_diabetes_data():
     X = data.drop('readmitted', axis=1)
     X.columns = [_str_replace(col) for col in X.columns]
     return X.reset_index(drop=True), y.reset_index(drop=True)
+
+def get_compas_data():
+    main = pd.read_csv('data/COMPAS/compas-scores-two-years.csv')
+    main = main[(abs(main['days_b_screening_arrest']) <= 30)]
+    cols = ['sex', 'age', 'age_cat', 'race', 'juv_fel_count', 'juv_misd_count', 'juv_other_count', 'priors_count', 'c_charge_degree', 'score_text', 'v_score_text', 'is_recid']
+    
+    df = main[cols]
+    df['y'] = df['is_recid']
+    df = df.drop('is_recid', axis=1)
+    df.drop(df.index[df['y'] == -1], axis=0).dropna().reset_index(drop=True)
+    cat_cols = ['sex', 'age_cat', 'race', 'c_charge_degree', 'score_text', 'v_score_text']
+    df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
+    y = df.y
+    X = df.drop('y', axis=1)
+    return X.reset_index(drop=True), y.reset_index(drop=True)

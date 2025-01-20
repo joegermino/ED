@@ -36,7 +36,6 @@ def agarwal(X_train, y_train, X_test, prot_col_idx, model):
 
     constraint = EqualizedOdds()
     mitigator = ExponentiatedGradient(model, constraint)
-
     mitigator.fit(X_train, y_train, sensitive_features=A_train)
     mitigation_preds = mitigator.predict(X_test)
     return mitigator, mitigation_preds
@@ -83,7 +82,7 @@ def hardt(X_train, y_train, X_test, prot_col_idx, model):
     postproc_preds = postproc_est.predict(X_test, sensitive_features=test_A)
     return postproc_est, postproc_preds
 
-def fair_tress(X_train, y_train, X_test, prot_col_idx, seed):
+def fair_trees(X_train, y_train, X_test, prot_col_idx, seed):
     '''
     ref:
     Pereira Barata, A., Takes, F.W., van den Herik, H.J. et al. 
@@ -116,7 +115,7 @@ def fair_tress(X_train, y_train, X_test, prot_col_idx, seed):
     mdl = ft.FairRandomForestClassifier(random_state=seed, criterion='scaff')
     mdl.fit(X_train, y_train, S_train)
     preds = mdl.predict_proba(X_test)
-    return mdl, preds
+    return mdl, preds[:, 1]
 
 def adv_deb(X_train, y_train, X_test, prot_col_idx, seed):
     '''
@@ -221,7 +220,7 @@ def xfair(X_train, y_train, X_test, prot_col_idx, seed):
 
     y_pred = final_classification_model.predict_proba(X_test)
 
-    return final_classification_model, y_pred
+    return final_classification_model, y_pred[:, 1]
 
 
 def zafar(X_train, y_train, X_test, prot_col_idx):
@@ -263,18 +262,18 @@ def cfa(X_train, y_train, X_test, prot_col_idx, params):
     '''
     if isinstance(X_train, torch.Tensor):
         X_train = X_train.numpy()
-    if isinstance(X_train, np.ndarray):
-        X_train = pd.DataFrame(X_train)
+    if isinstance(X_train, pd.DataFrame):
+        X_train = np.array(X_train)
 
     if isinstance(X_test, torch.Tensor):
         X_test = X_test.numpy()
-    if isinstance(X_test, np.ndarray):
-        X_test = pd.DataFrame(X_test)
+    if isinstance(X_test, pd.DataFrame):
+        X_test = np.array(X_test)
 
     if isinstance(y_train, torch.Tensor):
         y_train = y_train.numpy()
-    if isinstance(y_train, np.ndarray):
-        y_train = pd.Series(y_train)
+    if isinstance(y_train, pd.Series):
+        y_train = np.array(y_train)
 
     mdl = GridSearchCV(CFA(input_size=X_train.shape[1]), 
                 params, 
@@ -282,10 +281,10 @@ def cfa(X_train, y_train, X_test, prot_col_idx, params):
                 scoring='f1', 
                 cv=3, error_score='raise')
     # TODO: Add back gridsearch if this works.
-    mdl = CFA(input_size=X_train.shape[1], hidden_size=50, lr=.001, num_epochs=100, verbose=False)
+    # mdl = CFA(input_size=X_train.shape[1], hidden_size=50, lr=.001, num_epochs=100, verbose=False)
     
     mdl.fit(X_train, y_train, **{'prot_col_idx': prot_col_idx})
-    preds = mdl.predict_proba(X_test).detach().numpy()[:, 1]
+    preds = mdl.predict_proba(X_test)
     return mdl, preds
 
 def feldman(X_train, y_train, prot_col_idx): # If I can figure this out, extend to other AIF360 methods

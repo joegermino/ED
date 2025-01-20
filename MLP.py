@@ -5,6 +5,8 @@ import tqdm
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 from EDLoss import EDLoss
+from SPLoss import SPLoss
+from EOLoss import EOLoss
 from fastshap.utils import ShapleySampler
 
 class MLP(nn.Module):
@@ -124,7 +126,7 @@ class MLP(nn.Module):
         return self
 
 class EDMLP(nn.Module):
-    def __init__(self, input_size, hidden_size=10, output_size=1, lr=.001, num_epochs=100, verbose=True, seed=12345, batch_size=32):
+    def __init__(self, input_size, hidden_size=10, output_size=1, lr=.001, num_epochs=100, verbose=True, seed=12345, batch_size=32, lambda_=1):
         self.hidden_size = hidden_size
         self.input_size = input_size
         self.output_size = output_size
@@ -140,6 +142,8 @@ class EDMLP(nn.Module):
         self.lr = lr
         self.num_epochs = num_epochs
         self.verbose = verbose
+        self.lambda_ = lambda_
+        self.prot_col_idx = None
 
         self.explainer = nn.Sequential(
             nn.Linear(input_size, 128),
@@ -151,7 +155,14 @@ class EDMLP(nn.Module):
     def forward(self, x):
         return self.mlp(x)
     
-    def fit(self, X, y, prot_col_idx, lambda_=1):
+    def set_prot_col_idx(self, i):
+        self.prot_col_idx = i
+    
+    def fit(self, X, y, prot_col_idx=None, sample_weight=None, fair_loss=None):
+        if prot_col_idx is None and self.prot_col_idx is None:
+            raise ValueError("prot_col_idx cannot be null")
+        if prot_col_idx is not None:
+            self.prot_col_idx = prot_col_idx
         if not isinstance(X, torch.Tensor):
             X = torch.tensor(np.array(X), dtype=torch.float32)
         if not isinstance(y, torch.Tensor):
@@ -164,16 +175,24 @@ class EDMLP(nn.Module):
         fs_optimizer = optim.Adam(self.explainer.parameters(), lr=self.lr)
         mlp_optimizer = optim.Adam(self.mlp.parameters(), lr=self.lr)
         criterion_fair = EDLoss()
-        criterion_perf = nn.BCEWithLogitsLoss()
-
+        if sample_weight is not None:
+            if type(sample_weight) != torch.Tensor:
+                sample_weight = torch.tensor(np.array(sample_weight))
+            criterion_perf = nn.BCEWithLogitsLoss(weight=sample_weight)
+        else:
+            criterion_perf = nn.BCEWithLogitsLoss()
+        if fair_loss == 'sp':
+            criterion_standard_fair = SPLoss()
+        elif fair_loss == 'eo':
+            criterion_standard_fair = EOLoss()
+        else:
+            criterion_standard_fair = None
         loss_fn = nn.MSELoss()
         S = ShapleySampler(X.shape[1])
-
-
         for _ in tqdm.tqdm(range(self.num_epochs), disable=not self.verbose):
-            self._train_epoch(dataloader, criterion_fair, criterion_perf, fs_optimizer, mlp_optimizer, loss_fn, S, prot_col_idx, lambda_=1)
+            self._train_epoch(dataloader, criterion_fair, criterion_perf, criterion_standard_fair, fs_optimizer, mlp_optimizer, loss_fn, S, self.prot_col_idx, fair_loss)
         
-    def _train_epoch(self, iterator, criterion_fair, criterion_perf, fs_optimizer, mlp_optimizer, loss_fn, S, prot_col, lambda_):
+    def _train_epoch(self, iterator, criterion_fair, criterion_perf, criterion_standard_fair, fs_optimizer, mlp_optimizer, loss_fn, S, prot_col, fair_loss):
         self.train()
         imputer = lambda X, s: torch.sigmoid(self(X*s))
         for batch in iterator:
@@ -191,7 +210,11 @@ class EDMLP(nn.Module):
 
             mlp_optimizer.zero_grad()
             output = self(input_data)
-            mlp_loss = criterion_fair(self.explainer, torch.sigmoid(output), input_data, prot_col) + criterion_perf(output, labels)
+            mlp_loss = self.lambda_*criterion_fair(self.explainer, torch.sigmoid(output), input_data, prot_col) + criterion_perf(output, labels)
+            if fair_loss == 'sp':
+                mlp_loss += criterion_standard_fair(torch.sigmoid(output), input_data, prot_col)
+            elif fair_loss == 'eo':
+                mlp_loss += criterion_standard_fair(torch.sigmoid(output), input_data, labels, prot_col)
             mlp_loss.backward()
             mlp_optimizer.step()
             torch.cuda.empty_cache()
@@ -240,10 +263,11 @@ class EDMLP(nn.Module):
                 'output_size': self.output_size,
                 'verbose': self.verbose,
                 'seed': self.seed,
-                'batch_size': self.batch_size
+                'batch_size': self.batch_size,
+                'lambda_': self.lambda_
                }
     
-    def set_params(self, hidden_size=None, lr=None, num_epochs=None, input_size=None, output_size=None, verbose=None, seed=None, batch_size=None):
+    def set_params(self, hidden_size=None, lr=None, num_epochs=None, input_size=None, output_size=None, verbose=None, seed=None, batch_size=None, lambda_=None):
         if hidden_size is not None:
             self.hidden_size = hidden_size
         if lr is not None:
@@ -260,6 +284,8 @@ class EDMLP(nn.Module):
             self.seed = seed
         if batch_size is not None:
             self.batch_size = batch_size
+        if lambda_ is not None:
+            self.lambda_ = lambda_
         return self
 
 
@@ -270,13 +296,14 @@ if __name__ == '__main__':
     from sklearn.metrics import roc_auc_score, f1_score
     import shap
     import pandas as pd
-    X, y = FairDataLoader.get_adult_data()
+    X, y = FairDataLoader.get_diabetes_data()
+    pc = 'gender'
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.25, random_state=1234)
     scl = MinMaxScaler()
     X_train = scl.fit_transform(X_train)
     X_test = scl.transform(X_test)
-    mdl = EDMLP(X.shape[1], 50, 1, .001, 100)
-    mdl.fit(X_train, y_train, list(X.columns).index('sex__Male'))
+    mdl = EDMLP(X.shape[1], 50, 1, .001, 100, batch_size=128)
+    mdl.fit(X_train, y_train, list(X.columns).index(pc), fair_loss= 'eo')
     preds = mdl.predict_proba(X_test)
     e = shap.Explainer(mdl.predict, pd.DataFrame(X_train, columns=X.columns).iloc[:100, :])
     shaps = e(X_test, silent=False)

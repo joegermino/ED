@@ -36,11 +36,11 @@ def fairness_constraints_paper(train_X, train_y, test_X, pcs):
     sensitive_attrs_to_cov_thresh = {}
     gamma = None
 
-    def train_test_classifier():
+    def train_test_classifier(test_X):
         w = ut.train_model(train_X, train_y, train_X_control, loss_function, apply_fairness_constraints, apply_accuracy_constraint, sep_constraint, sensitive_attrs, sensitive_attrs_to_cov_thresh, gamma)
         distances_boundary_test = (np.dot(test_X, w)).tolist()
         all_class_labels_assigned_test = np.sign(distances_boundary_test)
-        correlation_dict_test = ut.get_correlations(None, None, all_class_labels_assigned_test, test_X_control, pcs)
+        # correlation_dict_test = ut.get_correlations(None, None, all_class_labels_assigned_test, test_X_control, pcs)
 
         return all_class_labels_assigned_test
 
@@ -48,7 +48,7 @@ def fairness_constraints_paper(train_X, train_y, test_X, pcs):
     apply_accuracy_constraint = 1  # want to optimize accuracy subject to fairness constraints
     sep_constraint = 1  # set the separate constraint flag to one, no misclassifications for certain points
     gamma = 1000.0
-    preds = train_test_classifier()
+    preds = train_test_classifier(test_X)
     return train_test_classifier, preds
 
 

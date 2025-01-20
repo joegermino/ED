@@ -10,7 +10,7 @@ class EDLoss(nn.Module):
 
     def forward(self, explainer, preds, X, prot_attr_idx):
         shaps = explainer(X)
-        shaps = abs(shaps)/abs(shaps).sum(axis=1).reshape(-1, 1) 
+        shaps = ((shaps - torch.min(shaps, axis=1).values.reshape(-1,1))/(torch.max(shaps, axis=1).values.reshape(-1,1)- torch.min(shaps, axis=1).values.reshape(-1,1))) # I'm going to hell for this line
 
         a0 = (X[:, prot_attr_idx] == 0)
         a1 = (X[:, prot_attr_idx] == 1) 
