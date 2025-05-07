@@ -1,5 +1,6 @@
 import pandas as pd
 from scipy.io import arff
+from folktables import ACSDataSource, ACSEmployment, ACSIncome, ACSPublicCoverage, ACSMobility, ACSTravelTime
 
 def _str_replace(string):
     string = string.replace('<', '_lt_')
@@ -247,3 +248,58 @@ def get_compas_data():
     y = df.y
     X = df.drop('y', axis=1)
     return X.reset_index(drop=True), y.reset_index(drop=True)
+
+def get_folk_income():
+    data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
+    ca_data = data_source.get_data(states=["CA"], download=False)
+    X, y, _ = ACSIncome.df_to_numpy(ca_data)
+    X = pd.DataFrame(X, columns=ACSIncome._features)
+    X['RAC1P'] = (X['RAC1P']==1).astype(int)
+    cat_cols = ['COW', 'SCHL', 'MAR', 'OCCP', 'POBP', 'RELP']
+    for col in cat_cols:
+        X = pd.get_dummies(X, columns=[col], prefix = [col], drop_first=True, dtype=int)
+    return X.reset_index(drop=True), pd.Series(y, dtype=int)
+
+def get_folk_pc():
+    data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
+    ca_data = data_source.get_data(states=["CA"], download=False)
+    X, y, _ = ACSPublicCoverage.df_to_numpy(ca_data)
+    X = pd.DataFrame(X, columns=ACSPublicCoverage._features)
+    X['RAC1P'] = (X['RAC1P']==1).astype(int)
+    cat_cols = ['SCHL', 'MAR', 'DIS', 'ESP', 'CIT', 'MIG', 'MIL', 'ANC', 'NATIVITY', 'DEAR', 'DEYE', 'DREM', 'ESR', 'ST', 'FER']
+    for col in cat_cols:
+        X = pd.get_dummies(X, columns=[col], prefix = [col], drop_first=True, dtype=int)
+    return X.reset_index(drop=True), pd.Series(y, dtype=int)
+
+def get_folk_mobility():
+    data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
+    ca_data = data_source.get_data(states=["CA"], download=False)
+    X, y, _ = ACSMobility.df_to_numpy(ca_data)
+    X = pd.DataFrame(X, columns=ACSMobility._features)
+    X['RAC1P'] = (X['RAC1P']==1).astype(int)
+    cat_cols = ['SCHL', 'MAR', 'DIS', 'ESP', 'CIT', 'MIL', 'ANC', 'NATIVITY', 'RELP', 'DEAR', 'DEYE', 'DREM', 'GCL', 'COW', 'ESR']
+    for col in cat_cols:
+        X = pd.get_dummies(X, columns=[col], prefix = [col], drop_first=True, dtype=int)
+    return X.reset_index(drop=True), pd.Series(y, dtype=int)
+
+def get_folk_employment():
+    data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
+    ca_data = data_source.get_data(states=["CA"], download=False)
+    X, y, _ = ACSEmployment.df_to_numpy(ca_data)
+    X = pd.DataFrame(X, columns=ACSEmployment._features)
+    X['RAC1P'] = (X['RAC1P']==1).astype(int)
+    cat_cols = ['SCHL', 'MAR', 'RELP', 'DIS', 'ESP', 'CIT', 'MIG', 'MIL', 'ANC', 'NATIVITY', 'DEAR', 'DEYE', 'DREM']
+    for col in cat_cols:
+        X = pd.get_dummies(X, columns=[col], prefix = [col], drop_first=True, dtype=int)
+    return X.reset_index(drop=True), pd.Series(y, dtype=int)
+
+def get_folk_travel_time():
+    data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
+    ca_data = data_source.get_data(states=["CA"], download=False)
+    X, y, _ = ACSTravelTime.df_to_numpy(ca_data)
+    X = pd.DataFrame(X, columns=ACSTravelTime._features)
+    X['RAC1P'] = (X['RAC1P']==1).astype(int)
+    cat_cols = ['SCHL', 'MAR', 'DIS', 'ESP', 'MIG', 'RELP', 'PUMA', 'ST', 'CIT', 'OCCP', 'JWTR', 'POWPUMA']
+    for col in cat_cols:
+        X = pd.get_dummies(X, columns=[col], prefix = [col], drop_first=True, dtype=int)
+    return X.reset_index(drop=True), pd.Series(y, dtype=int)

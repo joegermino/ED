@@ -3,3 +3,13 @@ EDOversampling.py
 data
 log*
 full_results*
+figures
+*.ipynb
+crc
+old_crc
+.vscode
+time_crc
+folk_experiment.py
+other_experiment.py
+time_experiment.py
+old_EDMLP.py
