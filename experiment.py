@@ -42,6 +42,13 @@ MLP_PARAM_SEARCH = {'hidden_size': [10, 50, 150],
                     'verbose': [False]
                     }
 
+MLP_SP_PARAM_SEARCH = {'hidden_size': [10, 50, 150],
+                    'lr': [.001, .0001],
+                    'num_epochs': [50, 100, 250],
+                    'batch_size': [128, 512, 1024],
+                    'verbose': [False]
+                    }
+
 AGARWAL_PARAM_SEARCH = {'hidden_size': [10, 50, 150],
                     'lr': [.001, .0001],
                     'num_epochs': [50, 100, 250],
@@ -101,7 +108,7 @@ def ed_mlp(X_train, y_train, X_test, y_test, prot_col_idx, seed):
     preds = mdl.predict_proba(X_test)
 
     e = fastshap(X_train, mdl.predict_proba)
-    res['EDMLP'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['EDMLP'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['EDMLP']['Time'] = runtime
     logger.info(res)
 
@@ -119,13 +126,13 @@ def ed_mlp(X_train, y_train, X_test, y_test, prot_col_idx, seed):
     logger.info(f'Best params: {mdl.best_params_}')
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['ED - MLP + F1 Loss'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['ED - MLP + F1 Loss'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['ED - MLP + F1 Loss']['Time'] = runtime
     logger.info(res)
 
     logger.info("TRAINING EDMLP with SP Loss")
     mdl = GridSearchCV(EDMLP.EDMLP_SP(input_size=X_train.shape[1], output_size=1, seed=seed, batch_size=X_train.shape[0]), 
-                    ED_MLP_ANYLOSS_PARAM_SEARCH, 
+                    ED_MLP_PARAM_SEARCH, 
                     n_jobs=-1, 
                     scoring='f1', 
                     cv=3, error_score='raise')
@@ -137,13 +144,13 @@ def ed_mlp(X_train, y_train, X_test, y_test, prot_col_idx, seed):
     logger.info(f'Best params: {mdl.best_params_}')
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['ED - MLP + SP Loss'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['ED - MLP + SP Loss'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['ED - MLP + SP Loss']['Time'] = runtime
     logger.info(res)
 
     logger.info("TRAINING EDMLP with F1 + SP Loss")
     mdl = GridSearchCV(EDMLP.EDMLP_F1_SP(input_size=X_train.shape[1], output_size=1, seed=seed, batch_size=X_train.shape[0]), 
-                    ED_MLP_PARAM_SEARCH, 
+                    ED_MLP_ANYLOSS_PARAM_SEARCH, 
                     n_jobs=-1, 
                     scoring='f1', 
                     cv=3, error_score='raise')
@@ -160,8 +167,35 @@ def ed_mlp(X_train, y_train, X_test, y_test, prot_col_idx, seed):
 
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['ED - MLP + F1 + SP Loss'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['ED - MLP + F1 + SP Loss'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['ED - MLP + F1 + SP Loss']['Time'] = runtime
+    logger.info(res)
+
+    logger.info("TRAINING EDMLP with CURRICULUM")
+    mdl = GridSearchCV(EDMLP.EDMLP_CURRICULUM(input_size=X_train.shape[1], output_size=1, seed=seed, batch_size=X_train.shape[0]), 
+                    ED_MLP_ANYLOSS_PARAM_SEARCH, 
+                    n_jobs=-1, 
+                    scoring='f1', 
+                    cv=3, error_score='raise')
+    start_time = time.process_time()
+    mdl.fit(X_train, y_train, **{'prot_col_idx': prot_col_idx})
+    runtime = time.process_time() - start_time
+
+    logger.info(f'\tTime: {runtime} seconds')
+    logger.info(f'Best params: {mdl.best_params_}')
+    logger.info(f'F1 Loss: {mdl.best_estimator_.f1_loss}')
+    logger.info(f'SP Loss: {mdl.best_estimator_.sp_loss}')
+    logger.info(f'ED Loss: {mdl.best_estimator_.ed_loss}')
+    logger.info(f'FS Loss: {mdl.best_estimator_.fs_loss}')
+
+    preds = mdl.predict_proba(X_test)
+    e = fastshap(X_train, mdl.predict_proba)
+    res['CURRICULUM'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
+    res['CURRICULUM']['Time'] = runtime
+    logger.info(f'F1 Loss: {mdl.best_estimator_.f1_loss}')
+    logger.info(f'SP Loss: {mdl.best_estimator_.sp_loss}')
+    logger.info(f'ED Loss: {mdl.best_estimator_.ed_loss}')
+    logger.info(f'FS Loss: {mdl.best_estimator_.fs_loss}')
     logger.info(res)
 
     return res
@@ -181,12 +215,12 @@ def mlp_baselines(X_train, y_train, X_test, y_test, prot_col_idx, cols, seed):
     logger.info(f'Best params: {mdl.best_params_}')
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['MLP_F1'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['MLP_F1'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['MLP_F1']['Time'] = runtime
 
     logger.info("TRAINING MLP SP")
     mdl = GridSearchCV(MLP.MLP_SP(input_size=X_train.shape[1], output_size=1, verbose=False, seed=seed), 
-                    MLP_PARAM_SEARCH, 
+                    MLP_SP_PARAM_SEARCH, 
                     n_jobs=-1, 
                     scoring='f1', 
                     cv=3)
@@ -198,7 +232,7 @@ def mlp_baselines(X_train, y_train, X_test, y_test, prot_col_idx, cols, seed):
     logger.info(f'Best params: {mdl.best_params_}')
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['MLP_SP'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['MLP_SP'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['MLP_SP']['Time'] = runtime
 
     logger.info("TRAINING MLP F1 + SP")
@@ -215,7 +249,7 @@ def mlp_baselines(X_train, y_train, X_test, y_test, prot_col_idx, cols, seed):
     logger.info(f'Best params: {mdl.best_params_}')
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['MLP_F1_SP'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['MLP_F1_SP'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['MLP_F1_SP']['Time'] = runtime
     
     logger.info("TRAINING AGARWAL")
@@ -231,7 +265,7 @@ def mlp_baselines(X_train, y_train, X_test, y_test, prot_col_idx, cols, seed):
     runtime = time.process_time() - start_time
     logger.info(f'\tTime: {runtime} seconds')
     e = fastshap(X_train, agarwal_mdl.predict)
-    res['Agarwal'] = evaluate(y_test, agarwal_preds, X_test, prot_col_idx, e)
+    res['Agarwal'] = evaluate(y_test, agarwal_preds, X_test, prot_col_idx, e, X_train)
     res['Agarwal']['Time'] = runtime
 
     logger.info("TRAINING HARDT")
@@ -244,7 +278,7 @@ def mlp_baselines(X_train, y_train, X_test, y_test, prot_col_idx, cols, seed):
         d = pd.DataFrame(X1, columns=cols)
         return hardt_mdl.predict(d, sensitive_features=d[sf])
     e = fastshap(X_train, predict_hardt)
-    res['Hardt'] = evaluate(y_test, hardt_preds, X_test, prot_col_idx, e)
+    res['Hardt'] = evaluate(y_test, hardt_preds, X_test, prot_col_idx, e, X_train)
     res['Hardt']['Time'] = runtime
     logger.info(res)
 
@@ -268,7 +302,7 @@ def feldman(X_train, y_train, X_test, y_test, prot_col_idx):
     logger.info(f'Best params: {mdl.best_params_}')
     preds = mdl.predict_proba(X_test)
     e = fastshap(X_train, mdl.predict_proba)
-    res['Feldman'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['Feldman'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['Feldman']['Time'] = runtime
 
     return res
@@ -281,7 +315,7 @@ def adv_deb(X_train, y_train, X_test, y_test, prot_col_idx, seed):
     runtime = time.process_time() - start_time
     logger.info(f'\tTime: {runtime} seconds')
     e = fastshap(X_train, mdl.predict)
-    res['Adversarial Debiasing'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['Adversarial Debiasing'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['Adversarial Debiasing']['Time'] = runtime
     return res
 
@@ -295,20 +329,21 @@ def x_fair(X_train, y_train, X_test, y_test, prot_col_idx, seed):
     def pred_xfair(X):
         return mdl.predict_proba(X)[:, 1]
     e = fastshap(X_train, pred_xfair)
-    res['xFair'] = evaluate(y_test, preds, X_test, prot_col_idx, e)
+    res['xFair'] = evaluate(y_test, preds, X_test, prot_col_idx, e, X_train)
     res['xFair']['Time'] = runtime
     return res
 
-def evaluate(trues, preds, X, prot_col_idx, e):
+def evaluate(trues, preds, X_test, prot_col_idx, e, X_train):
     res = {}
-    res['AUC'] = roc_auc_score(trues, preds)
+    res['AUC'] = roc_auc_score(trues, preds).item()
     res['F1'] = f1_score(trues, (preds>=.5).astype(int))
     res['Accuracy'] = accuracy_score(trues, (preds>=.5).astype(int))
     res['Precision'] = precision_score(trues, (preds>=.5).astype(int))
     res['Recall'] = recall_score(trues, (preds>=.5).astype(int))
-    res['Statistical Parity'] = fm.statistical_parity((preds>=.5).astype(int), X[:, prot_col_idx])
-    res['Equalized Odds'] = fm.equalized_odds((preds>=.5).astype(int), np.array(trues), X[:, prot_col_idx])
-    res['Explanation Difference'] = explanation_difference(e, X, prot_col_idx).item()
+    res['Statistical Parity'] = fm.statistical_parity((preds>=.5).astype(int), X_test[:, prot_col_idx]).item()
+    res['Equalized Odds'] = fm.equalized_odds((preds>=.5).astype(int), np.array(trues), X_test[:, prot_col_idx]).item()
+    res['GPF'] = fm.GPF_FAE_metric(X_train, X_test, e, X_test[:, prot_col_idx])
+    res['Explanation Difference'] = explanation_difference(e, X_test, prot_col_idx).item()
     return res
 
 def main(label):
@@ -351,6 +386,7 @@ def main(label):
                 pcs = ['gender']
                 ED_MLP_PARAM_SEARCH['batch_size'] = [256] # Because the diabetes data set is so small, a batch size of 128 breaks the code. 
                 MLP_PARAM_SEARCH['batch_size'] = [256]
+                MLP_SP_PARAM_SEARCH['batch_size'] = [256]
             elif dataset == 'compas':
                 X, y = FairDataLoader.get_compas_data()
                 pcs = ['race_Caucasian']
